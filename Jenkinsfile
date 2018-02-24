@@ -1,7 +1,37 @@
-stage('Dev') {
-    // some block
-}
+// define Logrotation and scm Polling
+properties(
+    [
+        [
+            $class: 'BuildDiscarderProperty',
+            strategy: [$class: 'LogRotator', numToKeepStr: '10']
+        ],
+        pipelineTriggers([cron('H/5 * * * *')]),
+    ]
+)
 
-stage('master') {
-    // some block
+try{
+    node('nodejs') {
+
+        stage('Checkout'){
+            checkout scm
+        }
+        // run test in Jenkins Slave
+        stage('buildAndTest'){
+             sh "npm build"
+        }
+
+        // trigger Build on OpenShift
+        stage('buildOnOpenShift'){
+             openshiftBuild(buildConfig: '${NAME}', showBuildLogs: 'true')
+        }
+
+        stage('deploy') {
+            openshiftDeploy(deploymentConfig: '${NAME}')
+        }
+    }
+} catch (Exception e) {
+    // Notify
+    echo "send error mail to brypayty_50@yahoo.com"
+    mail subject: "Build failed with ${e.message}", to: "brypayty_50@yahoo.com", body: "Job failed: ${env.BUILD_URL} \n\n${e.stackTrace}"
+    throw e;
 }
